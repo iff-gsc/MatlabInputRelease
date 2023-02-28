@@ -31,13 +31,32 @@ function setup(block)
     forcefeed = block.DialogPrm(3).Data;
     
     % initialize joystick
-    joy = HebiJoystick(joyid);
+    no_joystick = false;
+    try
+        joy = HebiJoystick(joyid);
+    catch ME
+        if strcmp(ME.ExceptionObject.getMessage, 'Joystick is not connected.')
+            no_joystick = true;
+            warning('No joystick with ID %i connected! Running ''HebiJoystick Input'' with dummy outputs!', joyid);
+        else
+            rethrow(ME);
+        end
+    end
     
-    % read capabilities of joystick
-    caps = joy.caps();
+    % no joystick handling
+    if no_joystick
+        % fake capabilities of joystick
+        caps.Axes = 1;
+        caps.Buttons = 1;
+        caps.Forces = 0;
+    else    
+        % read capabilities of joystick
+        caps = joy.caps();
+        
+        % store persistent data
+        set_param(block.BlockHandle,'UserData',joy);
+    end
     
-    % store persistent data
-    set_param(block.BlockHandle,'UserData',joy);
     
     %% Register number of output ports
     block.NumOutputPorts = 2;
@@ -49,10 +68,6 @@ function setup(block)
         block.NumInputPorts = 0;
     end
     
-    %% Set up the port properties to be inherited or dynamic
-    block.SetPreCompInpPortInfoToDynamic;
-    block.SetPreCompOutPortInfoToDynamic;
-
     %% Set the output port properties
     block.OutputPort(1).DimensionsMode = 'Fixed';
     block.OutputPort(1).SamplingMode = 'sample';
@@ -82,11 +97,13 @@ function setup(block)
     block.SampleTimes = [1/50 0];  % Discrete sample time (50 Hz)
     
     %% Set the block simStateCompliance to default (i.e., same as a built-in block)
-    block.SimStateCompliance = 'DefaultSimState';    
+    block.SimStateCompliance = 'DefaultSimState';
     
     %% Register methods
-    block.RegBlockMethod('Outputs',                   @Outputs);
-    block.RegBlockMethod('Terminate',                 @Terminate);
+    if ~no_joystick
+        block.RegBlockMethod('Outputs',     @Outputs);
+        block.RegBlockMethod('Terminate',   @Terminate);
+    end
     
 %endfunction
 
